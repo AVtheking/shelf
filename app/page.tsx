@@ -50,10 +50,18 @@ export default function HomePage() {
   const [showAdd, setShowAdd] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [todayLabel, setTodayLabel] = useState('\u00a0');
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setArticles(loadArticles()), 0);
+    const timer = window.setTimeout(() => {
+      setArticles(loadArticles());
+      setTodayLabel(new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      }).format(new Date()));
+    }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -209,7 +217,7 @@ export default function HomePage() {
       <section className="main-panel">
         <header className="topbar">
           <div>
-            <p className="eyebrow">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p>
+            <p className="eyebrow">{todayLabel}</p>
             <h1>{activeView === 'home' ? 'Your reading shelf' : libraryTitle}</h1>
           </div>
           <div className="top-actions">
