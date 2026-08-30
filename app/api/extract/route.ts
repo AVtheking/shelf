@@ -1,4 +1,5 @@
 import { Readability } from '@mozilla/readability';
+import { Data, Effect, Schema } from 'effect';
 import { parseHTML } from 'linkedom';
 
 export const runtime = 'nodejs';
@@ -13,6 +14,23 @@ const ALLOWED_TAGS = new Set([
 ]);
 const BLOCK_TAGS = new Set(['blockquote', 'figcaption', 'h1', 'h2', 'h3', 'h4', 'li', 'p', 'pre']);
 const ASCII_ART_PATTERN = /[┌┐└┘│─╔╗╚╝═║▲▼◐○]/;
+const ArticleRequestSchema = Schema.Struct({ url: Schema.String });
+
+class InvalidArticleRequest extends Data.TaggedError('InvalidArticleRequest')<{
+  readonly message: string;
+}> {}
+
+class ArticleFetchFailure extends Data.TaggedError('ArticleFetchFailure')<{
+  readonly message: string;
+}> {}
+
+class ArticleFetchTimeout extends Data.TaggedError('ArticleFetchTimeout')<{
+  readonly message: string;
+}> {}
+
+class ArticleExtractionFailure extends Data.TaggedError('ArticleExtractionFailure')<{
+  readonly message: string;
+}> {}
 
 function isPrivateHost(hostname: string) {
   const normalized = hostname.replace(/^\[|\]$/g, '');
@@ -22,13 +40,19 @@ function isPrivateHost(hostname: string) {
   return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
 }
 
-function normalizeUrl(value: unknown) {
-  if (typeof value !== 'string') throw new Error('Enter a valid article URL.');
-  const url = new URL(value.trim());
-  if (!['http:', 'https:'].includes(url.protocol) || isPrivateHost(url.hostname)) {
-    throw new Error('Only public http or https article URLs are supported.');
-  }
-  return url;
+function normalizeUrl(value: string) {
+  return Effect.try({
+    try: () => {
+      const url = new URL(value.trim());
+      if (!['http:', 'https:'].includes(url.protocol) || isPrivateHost(url.hostname)) {
+        throw new Error('Unsupported article URL');
+      }
+      return url;
+    },
+    catch: () => new InvalidArticleRequest({
+      message: 'Only public http or https article URLs are supported.',
+    }),
+  });
 }
 
 function safeAbsoluteUrl(value: string, base: URL) {
@@ -105,63 +129,133 @@ function sanitizeArticle(html: string, baseUrl: URL) {
   return body.innerHTML;
 }
 
-async function fetchPublicPage(startUrl: URL, signal: AbortSignal) {
-  let currentUrl = startUrl;
-
-  for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
-    const response = await fetch(currentUrl.href, {
-      redirect: 'manual',
-      signal,
-      headers: {
-        Accept: 'text/html,application/xhtml+xml',
-        'User-Agent': 'ShelfReader/0.1 (+personal reading app)',
-      },
-    });
-
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new Error('The article redirected without a destination.');
-      currentUrl = normalizeUrl(new URL(location, currentUrl).href);
-      continue;
-    }
-
-    return { response, finalUrl: currentUrl };
-  }
-
-  throw new Error('The article redirected too many times.');
+function readArticleUrl(request: Request) {
+  return Effect.tryPromise({
+    try: () => request.json(),
+    catch: () => new InvalidArticleRequest({ message: 'Enter a valid article URL.' }),
+  }).pipe(
+    Effect.flatMap((body) => Schema.decodeUnknownEffect(ArticleRequestSchema)(body).pipe(
+      Effect.mapError(() => new InvalidArticleRequest({ message: 'Enter a valid article URL.' })),
+    )),
+    Effect.flatMap(({ url }) => normalizeUrl(url)),
+  );
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json() as { url?: unknown };
-    const url = normalizeUrl(body.url);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12_000);
+function fetchPublicPage(startUrl: URL) {
+  return Effect.gen(function* () {
+    let currentUrl = startUrl;
 
-    const { response, finalUrl } = await fetchPublicPage(url, controller.signal)
-      .finally(() => clearTimeout(timeout));
+    for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
+      const requestUrl = currentUrl;
+      const response = yield* Effect.tryPromise({
+        try: (signal) => fetch(requestUrl.href, {
+          redirect: 'manual',
+          signal,
+          headers: {
+            Accept: 'text/html,application/xhtml+xml',
+            'User-Agent': 'ShelfReader/0.1 (+personal reading app)',
+          },
+        }),
+        catch: () => new ArticleFetchFailure({ message: 'Shelf could not reach that article.' }),
+      });
 
-    if (!response.ok) throw new Error(`The page returned ${response.status}.`);
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!contentType.includes('text/html')) throw new Error('That URL is not an HTML article.');
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) {
+          return yield* Effect.fail(new ArticleFetchFailure({
+            message: 'The article redirected without a destination.',
+          }));
+        }
+        currentUrl = yield* normalizeUrl(new URL(location, currentUrl).href).pipe(
+          Effect.mapError((error) => new ArticleFetchFailure({ message: error.message })),
+        );
+        continue;
+      }
 
-    const html = await response.text();
-    if (html.length > MAX_HTML_LENGTH) throw new Error('That page is too large to save.');
-
-    const { document } = parseHTML(html);
-    const parsed = new Readability(document as unknown as Document, {
-      charThreshold: 180,
-      keepClasses: true,
-    }).parse();
-
-    if (!parsed?.content || !parsed.title) {
-      throw new Error('Shelf could not find a readable article on that page.');
+      return { response, finalUrl: currentUrl };
     }
 
-    const content = sanitizeArticle(parsed.content, finalUrl);
-    if (!content) throw new Error('The article did not contain readable content.');
+    return yield* Effect.fail(new ArticleFetchFailure({
+      message: 'The article redirected too many times.',
+    }));
+  });
+}
 
-    return Response.json({
+function downloadArticle(url: URL) {
+  return Effect.gen(function* () {
+    const { response, finalUrl } = yield* fetchPublicPage(url);
+
+    if (!response.ok) {
+      return yield* Effect.fail(new ArticleFetchFailure({
+        message: `The page returned ${response.status}.`,
+      }));
+    }
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!contentType.includes('text/html')) {
+      return yield* Effect.fail(new ArticleFetchFailure({
+        message: 'That URL is not an HTML article.',
+      }));
+    }
+
+    const html = yield* Effect.tryPromise({
+      try: () => response.text(),
+      catch: () => new ArticleFetchFailure({ message: 'Shelf could not download that article.' }),
+    });
+
+    if (html.length > MAX_HTML_LENGTH) {
+      return yield* Effect.fail(new ArticleFetchFailure({
+        message: 'That page is too large to save.',
+      }));
+    }
+
+    return { html, finalUrl };
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: '12 seconds',
+      orElse: () => Effect.fail(new ArticleFetchTimeout({
+        message: 'The article took too long to respond.',
+      })),
+    }),
+  );
+}
+
+function extractReadableArticle(html: string, finalUrl: URL) {
+  return Effect.gen(function* () {
+    const parsed = yield* Effect.try({
+      try: () => {
+        const { document } = parseHTML(html);
+        return new Readability(document as unknown as Document, {
+          charThreshold: 180,
+          keepClasses: true,
+        }).parse();
+      },
+      catch: () => new ArticleExtractionFailure({
+        message: 'Shelf could not process that article.',
+      }),
+    });
+
+    if (!parsed?.content || !parsed.title) {
+      return yield* Effect.fail(new ArticleExtractionFailure({
+        message: 'Shelf could not find a readable article on that page.',
+      }));
+    }
+
+    const parsedContent = parsed.content;
+    const content = yield* Effect.try({
+      try: () => sanitizeArticle(parsedContent, finalUrl),
+      catch: () => new ArticleExtractionFailure({
+        message: 'Shelf could not create a safe reading copy of that article.',
+      }),
+    });
+
+    if (!content) {
+      return yield* Effect.fail(new ArticleExtractionFailure({
+        message: 'The article did not contain readable content.',
+      }));
+    }
+
+    return {
       url: finalUrl.href,
       title: parsed.title,
       excerpt: parsed.excerpt || '',
@@ -169,11 +263,30 @@ export async function POST(request: Request) {
       byline: parsed.byline || '',
       siteName: parsed.siteName || finalUrl.hostname.replace(/^www\./, ''),
       readTime: Math.max(1, Math.ceil((parsed.length || parsed.textContent?.length || 0) / 1000)),
-    });
-  } catch (error) {
-    const message = error instanceof Error && error.name !== 'AbortError'
-      ? error.message
-      : 'The article took too long to respond.';
-    return Response.json({ error: message }, { status: 400 });
-  }
+    };
+  });
+}
+
+function errorResponse(status: number) {
+  return (error: { readonly message: string }) => Effect.succeed(
+    Response.json({ error: error.message }, { status }),
+  );
+}
+
+export function POST(request: Request) {
+  const program = Effect.gen(function* () {
+    const url = yield* readArticleUrl(request);
+    const { html, finalUrl } = yield* downloadArticle(url);
+    return yield* extractReadableArticle(html, finalUrl);
+  }).pipe(
+    Effect.map((article) => Response.json(article)),
+    Effect.catchTags({
+      InvalidArticleRequest: errorResponse(400),
+      ArticleFetchFailure: errorResponse(400),
+      ArticleFetchTimeout: errorResponse(408),
+      ArticleExtractionFailure: errorResponse(422),
+    }),
+  );
+
+  return Effect.runPromise(program);
 }

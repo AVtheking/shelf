@@ -22,7 +22,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { Effect } from 'effect';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchArticleEffect } from './lib/article-client';
 import { loadArticles, removeReadingProgress, saveArticles, saveReadingProgress } from './lib/storage';
 import type { Article, ArticleAccent, ExtractedArticle, ReadingProgress } from './lib/types';
 
@@ -345,6 +347,7 @@ function AddArticleModal({ onClose, onAdd }: {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const requestControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => event.key === 'Escape' && !loading && onClose();
@@ -352,22 +355,24 @@ function AddArticleModal({ onClose, onAdd }: {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [loading, onClose]);
 
+  useEffect(() => () => requestControllerRef.current?.abort(), []);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
     setLoading(true);
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     try {
-      const response = await fetch('/api/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+      const result = await Effect.runPromise(fetchArticleEffect(url), {
+        signal: controller.signal,
       });
-      const result = await response.json() as ExtractedArticle & { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Could not save that article.');
       onAdd(result);
     } catch (caught) {
+      if (controller.signal.aborted) return;
       setError(caught instanceof Error ? caught.message : 'Could not save that article.');
     } finally {
+      if (requestControllerRef.current === controller) requestControllerRef.current = null;
       setLoading(false);
     }
   };
