@@ -1,3 +1,5 @@
+import { Option } from 'effect';
+import { syncStatusWithProgress } from './article-state';
 import type { Article, ReadingProgress } from './types';
 
 const ARTICLES_KEY = 'shelf:articles:v1';
@@ -47,17 +49,15 @@ function progressKey(articleId: string) {
   return `${PROGRESS_PREFIX}${articleId}`;
 }
 
-export function loadReadingProgress(articleId: string): ReadingProgress | null {
-  if (typeof window === 'undefined') return null;
+const parseReadingProgress = Option.liftThrowable((value: string) => JSON.parse(value) as ReadingProgress);
 
-  try {
-    const value = window.localStorage.getItem(progressKey(articleId));
-    if (!value) return null;
-    const progress = JSON.parse(value) as ReadingProgress;
-    return typeof progress.percent === 'number' ? progress : null;
-  } catch {
-    return null;
-  }
+export function loadReadingProgress(articleId: string): Option.Option<ReadingProgress> {
+  if (typeof window === 'undefined') return Option.none();
+
+  return Option.fromNullishOr(window.localStorage.getItem(progressKey(articleId))).pipe(
+    Option.flatMap(parseReadingProgress),
+    Option.filter((progress) => typeof progress.percent === 'number'),
+  );
 }
 
 export function saveReadingProgress(articleId: string, progress: ReadingProgress) {
@@ -86,14 +86,10 @@ export function loadArticles(): Article[] {
         const migrated = { ...article };
         delete migrated.category;
         migrated.content = normalizeArticleContent(migrated.content);
-        const progress = loadReadingProgress(migrated.id) ?? migrated.progress;
-        const status = migrated.status === 'archived'
-          ? 'archived'
-          : progress.percent >= 98
-            ? 'finished'
-            : progress.percent > 0
-              ? 'reading'
-              : migrated.status;
+        const progress = loadReadingProgress(migrated.id).pipe(
+          Option.getOrElse(() => migrated.progress),
+        );
+        const status = syncStatusWithProgress(migrated.status, progress.percent);
         return { ...migrated, progress, status } as Article;
       });
 

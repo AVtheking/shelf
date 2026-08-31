@@ -1,4 +1,4 @@
-import { Data, Effect, Schema } from 'effect';
+import { Data, Effect, Match, Option, Schema } from 'effect';
 
 const ExtractedArticleSchema = Schema.Struct({
   url: Schema.String,
@@ -15,8 +15,16 @@ class AddArticleFailure extends Data.TaggedError('AddArticleFailure')<{
 }> {}
 
 function errorMessageFrom(body: unknown) {
-  if (typeof body !== 'object' || body === null || !('error' in body)) return null;
-  return typeof body.error === 'string' ? body.error : null;
+  return Match.value(body).pipe(
+    Match.when(
+      (value: unknown): value is { readonly error: string } => typeof value === 'object'
+        && value !== null
+        && 'error' in value
+        && typeof value.error === 'string',
+      ({ error }) => Option.some(error),
+    ),
+    Match.orElse(() => Option.none<string>()),
+  );
 }
 
 export function fetchArticleEffect(url: string) {
@@ -42,7 +50,9 @@ export function fetchArticleEffect(url: string) {
 
     if (!response.ok) {
       return yield* Effect.fail(new AddArticleFailure({
-        message: errorMessageFrom(body) ?? 'Could not save that article.',
+        message: errorMessageFrom(body).pipe(
+          Option.getOrElse(() => 'Could not save that article.'),
+        ),
       }));
     }
 

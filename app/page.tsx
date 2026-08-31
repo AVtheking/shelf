@@ -6,7 +6,9 @@ import {
   Bookmark,
   BookOpen,
   Check,
+  CheckCircle2,
   ChevronRight,
+  Circle,
   Clock3,
   ExternalLink,
   Heart,
@@ -22,13 +24,18 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { Effect } from 'effect';
+import { Effect, Match, Option } from 'effect';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchArticleEffect } from './lib/article-client';
+import {
+  articleIsVisibleInView,
+  getShelfViewCopy,
+  readingStatusFromProgress,
+  syncStatusWithProgress,
+  type ShelfView,
+} from './lib/article-state';
 import { loadArticles, removeReadingProgress, saveArticles, saveReadingProgress } from './lib/storage';
 import type { Article, ArticleAccent, ExtractedArticle, ReadingProgress } from './lib/types';
-
-type View = 'home' | 'all' | 'favorites' | 'archive';
 
 const THEME_STORAGE_KEY = 'shelf:theme';
 
@@ -44,7 +51,7 @@ function formatSaved(date: string) {
 
 export default function HomePage() {
   const [articles, setArticles] = useState<Article[]>([]);
-  const [activeView, setActiveView] = useState<View>('home');
+  const [activeView, setActiveView] = useState<ShelfView>('home');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -95,26 +102,28 @@ export default function HomePage() {
   const visibleArticles = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return articles
-      .filter((article) => {
-        if (activeView === 'favorites') return article.favorite && article.status !== 'archived';
-        if (activeView === 'archive') return article.status === 'archived';
-        return article.status !== 'archived';
-      })
+      .filter((article) => articleIsVisibleInView(activeView, article))
       .filter((article) => !normalizedQuery || [article.title, article.siteName, article.excerpt]
         .join(' ').toLowerCase().includes(normalizedQuery))
       .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
   }, [activeView, articles, query]);
 
-  const continueArticle = useMemo(() => articles
+  const continueArticle = useMemo(() => Option.fromNullishOr(articles
     .filter((article) => article.status === 'reading' && article.progress.percent > 0 && article.progress.percent < 98)
-    .sort((a, b) => new Date(b.progress.updatedAt).getTime() - new Date(a.progress.updatedAt).getTime())[0], [articles]);
+    .sort((a, b) => new Date(b.progress.updatedAt).getTime() - new Date(a.progress.updatedAt).getTime())[0]), [articles]);
 
-  const selectedArticle = selectedId ? articles.find((article) => article.id === selectedId) ?? null : null;
+  const selectedArticle = Option.fromNullishOr(selectedId).pipe(
+    Option.flatMap((id) => Option.fromNullishOr(articles.find((article) => article.id === id))),
+  );
+  const continueArticleId = continueArticle.pipe(
+    Option.map((article) => article.id),
+    Option.getOrUndefined,
+  );
   const recentArticles = activeView === 'home' && !query
-    ? visibleArticles.filter((article) => article.id !== continueArticle?.id).slice(0, 6)
+    ? visibleArticles.filter((article) => article.id !== continueArticleId).slice(0, 6)
     : visibleArticles;
 
-  const chooseView = (view: View) => {
+  const chooseView = (view: ShelfView) => {
     setActiveView(view);
     setMenuId(null);
   };
@@ -143,6 +152,17 @@ export default function HomePage() {
     });
   }, []);
 
+  const openArticle = useCallback((article: Article) => {
+    if (article.status === 'unread') {
+      updateArticle(article.id, (current) => ({
+        ...current,
+        status: 'reading',
+        progress: { ...current.progress, updatedAt: new Date().toISOString() },
+      }));
+    }
+    setSelectedId(article.id);
+  }, [updateArticle]);
+
   const updateProgress = useCallback((id: string, progress: ReadingProgress) => {
     try {
       saveReadingProgress(id, progress);
@@ -150,13 +170,7 @@ export default function HomePage() {
         ? {
             ...article,
             progress,
-            status: article.status === 'archived'
-              ? 'archived'
-              : progress.percent >= 98
-                ? 'finished'
-                : progress.percent > 0
-                  ? 'reading'
-                  : article.status,
+            status: syncStatusWithProgress(article.status, progress.percent),
           }
         : article));
     } catch {
@@ -185,13 +199,11 @@ export default function HomePage() {
     setMenuId(null);
   };
 
-  const libraryTitle = activeView === 'favorites'
-      ? 'Favorites'
-      : activeView === 'archive'
-        ? 'Archive'
-        : activeView === 'all'
-          ? 'All articles'
-          : 'Recent additions';
+  const viewCopy = getShelfViewCopy(activeView);
+
+  const libraryEyebrow = query
+    ? `${visibleArticles.length} matching results`
+    : viewCopy.eyebrow;
 
   return (
     <main className="app-shell" onClick={() => menuId && setMenuId(null)}>
@@ -218,7 +230,7 @@ export default function HomePage() {
         <header className="topbar">
           <div>
             <p className="eyebrow">{todayLabel}</p>
-            <h1>{activeView === 'home' ? 'Your reading shelf' : libraryTitle}</h1>
+            <h1>{viewCopy.pageTitle}</h1>
           </div>
           <div className="top-actions">
             <label className="search-box">
@@ -241,34 +253,55 @@ export default function HomePage() {
         </header>
 
         <div className="content-wrap">
-          {activeView === 'home' && !query && continueArticle && (
-            <section className="continue-section">
-              <div className="section-title-row">
-                <div><p className="eyebrow">Pick up where you left off</p><h2>Continue reading</h2></div>
-                <button className="text-button" onClick={() => chooseView('all')}>View all <ChevronRight size={16} /></button>
-              </div>
+          <nav className="status-tabs" aria-label="Reading status">
+            <button className={`status-tab ${activeView === 'unread' ? 'active' : ''}`} onClick={() => chooseView('unread')}>
+              <Circle size={15} />
+              <b>Unread</b>
+              <span>{articles.filter((article) => article.status === 'unread').length}</span>
+            </button>
+            <button className={`status-tab ${activeView === 'reading' ? 'active' : ''}`} onClick={() => chooseView('reading')}>
+              <BookOpen size={15} />
+              <b>Reading</b>
+              <span>{articles.filter((article) => article.status === 'reading').length}</span>
+            </button>
+            <button className={`status-tab ${activeView === 'finished' ? 'active' : ''}`} onClick={() => chooseView('finished')}>
+              <CheckCircle2 size={15} />
+              <b>Finished</b>
+              <span>{articles.filter((article) => article.status === 'finished').length}</span>
+            </button>
+          </nav>
 
-              <article className="continue-card">
-                <div className="continue-visual">
-                  <span className="visual-label">{continueArticle.siteName}</span>
-                  <span className="visual-quote">“{continueArticle.excerpt}”</span>
-                  <span className="visual-orbit" aria-hidden="true" />
+          {activeView === 'home' && !query && Option.match(continueArticle, {
+            onNone: () => null,
+            onSome: (continueArticle) => (
+              <section className="continue-section">
+                <div className="section-title-row">
+                  <div><p className="eyebrow">Pick up where you left off</p><h2>Continue reading</h2></div>
+                  <button className="text-button" onClick={() => chooseView('all')}>View all <ChevronRight size={16} /></button>
                 </div>
-                <div className="continue-copy">
-                  <div className="article-meta"><span>{continueArticle.siteName}</span><span>•</span><span>{continueArticle.readTime} MIN READ</span></div>
-                  <h3>{continueArticle.title}</h3>
-                  <p>{continueArticle.excerpt}</p>
-                  <div className="progress-copy"><span>{Math.round(continueArticle.progress.percent)}% complete</span><span>About {Math.max(1, Math.ceil(continueArticle.readTime * (1 - continueArticle.progress.percent / 100)))} min left</span></div>
-                  <div className="progress-track"><span style={{ width: `${continueArticle.progress.percent}%` }} /></div>
-                  <button className="resume-button" onClick={() => setSelectedId(continueArticle.id)}><BookOpen size={17} /> Resume reading</button>
-                </div>
-              </article>
-            </section>
-          )}
+
+                <article className="continue-card">
+                  <div className="continue-visual">
+                    <span className="visual-label">{continueArticle.siteName}</span>
+                    <span className="visual-quote">“{continueArticle.excerpt}”</span>
+                    <span className="visual-orbit" aria-hidden="true" />
+                  </div>
+                  <div className="continue-copy">
+                    <div className="article-meta"><span>{continueArticle.siteName}</span><span>•</span><span>{continueArticle.readTime} MIN READ</span></div>
+                    <h3>{continueArticle.title}</h3>
+                    <p>{continueArticle.excerpt}</p>
+                    <div className="progress-copy"><span>{Math.round(continueArticle.progress.percent)}% complete</span><span>About {Math.max(1, Math.ceil(continueArticle.readTime * (1 - continueArticle.progress.percent / 100)))} min left</span></div>
+                    <div className="progress-track"><span style={{ width: `${continueArticle.progress.percent}%` }} /></div>
+                    <button className="resume-button" onClick={() => openArticle(continueArticle)}><BookOpen size={17} /> Resume reading</button>
+                  </div>
+                </article>
+              </section>
+            ),
+          })}
 
           <section className="recent-section">
             <div className="section-title-row">
-              <div><p className="eyebrow">{activeView === 'archive' ? 'Saved out of sight' : query ? `${visibleArticles.length} matching results` : 'Saved for later'}</p><h2>{libraryTitle}</h2></div>
+              <div><p className="eyebrow">{libraryEyebrow}</p><h2>{viewCopy.libraryTitle}</h2></div>
               {query && <button className="filter-button" onClick={() => setQuery('')}>Clear search <X size={14} /></button>}
             </div>
 
@@ -279,10 +312,16 @@ export default function HomePage() {
                     article={article}
                     key={article.id}
                     menuOpen={menuId === article.id}
-                    onOpen={() => setSelectedId(article.id)}
+                    onOpen={() => openArticle(article)}
                     onMenu={(event) => { event.stopPropagation(); setMenuId(menuId === article.id ? null : article.id); }}
                     onFavorite={() => updateArticle(article.id, (item) => ({ ...item, favorite: !item.favorite }), article.favorite ? 'Removed from favorites' : 'Added to favorites')}
-                    onArchive={() => updateArticle(article.id, (item) => ({ ...item, status: item.status === 'archived' ? 'unread' : 'archived' }), article.status === 'archived' ? 'Returned to your shelf' : 'Article archived')}
+                    onArchive={() => updateArticle(article.id, (item) => ({
+                      ...item,
+                      status: Match.value(item.status).pipe(
+                        Match.when('archived', () => readingStatusFromProgress(item.progress.percent)),
+                        Match.orElse(() => 'archived' as const),
+                      ),
+                    }), article.status === 'archived' ? 'Returned to your shelf' : 'Article archived')}
                     onDelete={() => deleteArticle(article)}
                   />
                 ))}
@@ -291,7 +330,7 @@ export default function HomePage() {
               <div className="empty-state">
                 <span><BookOpen size={24} /></span>
                 <h3>Nothing here yet</h3>
-                <p>{query ? 'Try a different search.' : 'Add an article and it will appear on your shelf.'}</p>
+                <p>{query ? 'Try a different search.' : viewCopy.emptyMessage}</p>
                 {!query && <button className="primary-button" onClick={() => setShowAdd(true)}><Plus size={17} /> Add article</button>}
               </div>
             )}
@@ -300,14 +339,17 @@ export default function HomePage() {
       </section>
 
       {showAdd && <AddArticleModal onClose={() => setShowAdd(false)} onAdd={addArticle} />}
-      {selectedArticle && (
-        <Reader
-          article={selectedArticle}
-          onClose={() => setSelectedId(null)}
-          onProgress={updateProgress}
-          onToggleFavorite={() => updateArticle(selectedArticle.id, (article) => ({ ...article, favorite: !article.favorite }))}
-        />
-      )}
+      {Option.match(selectedArticle, {
+        onNone: () => null,
+        onSome: (selectedArticle) => (
+          <Reader
+            article={selectedArticle}
+            onClose={() => setSelectedId(null)}
+            onProgress={updateProgress}
+            onToggleFavorite={() => updateArticle(selectedArticle.id, (article) => ({ ...article, favorite: !article.favorite }))}
+          />
+        ),
+      })}
       {toast && <div className="toast" role="status"><Check size={16} /> {toast}</div>}
     </main>
   );
@@ -322,6 +364,17 @@ function ArticleCard({ article, menuOpen, onOpen, onMenu, onFavorite, onArchive,
   onArchive: () => void;
   onDelete: () => void;
 }) {
+  const readingLabel = Match.value(article.progress.percent).pipe(
+    Match.when((percent) => percent > 0, (percent) => `${Math.round(percent)}% read`),
+    Match.orElse(() => 'Started'),
+  );
+  const statusLabel = Match.value(article.status).pipe(
+    Match.when('finished', () => 'Finished'),
+    Match.when('reading', () => readingLabel),
+    Match.when(Match.is('unread', 'archived'), () => formatSaved(article.savedAt)),
+    Match.exhaustive,
+  );
+
   return (
     <article className="article-card">
       <button className={`article-cover cover-${article.accent}`} onClick={onOpen} aria-label={`Read ${article.title}`}>
@@ -342,7 +395,10 @@ function ArticleCard({ article, menuOpen, onOpen, onMenu, onFavorite, onArchive,
         {article.progress.percent > 0 && article.status !== 'archived' && (
           <div className="card-progress" aria-label={`${Math.round(article.progress.percent)} percent read`}><span style={{ width: `${article.progress.percent}%` }} /></div>
         )}
-        <div className="article-footer"><span><Clock3 size={14} /> {article.readTime} min</span><span>{article.status === 'finished' ? 'Finished' : formatSaved(article.savedAt)}</span></div>
+        <div className="article-footer">
+          <span><Clock3 size={14} /> {article.readTime} min</span>
+          <span>{statusLabel}</span>
+        </div>
       </button>
     </article>
   );
@@ -378,7 +434,10 @@ function AddArticleModal({ onClose, onAdd }: {
       onAdd(result);
     } catch (caught) {
       if (controller.signal.aborted) return;
-      setError(caught instanceof Error ? caught.message : 'Could not save that article.');
+      setError(Match.value(caught).pipe(
+        Match.when(Match.instanceOf(Error), (error) => error.message),
+        Match.orElse(() => 'Could not save that article.'),
+      ));
     } finally {
       if (requestControllerRef.current === controller) requestControllerRef.current = null;
       setLoading(false);
@@ -472,20 +531,27 @@ function Reader({ article, onClose, onProgress, onToggleFavorite }: {
 
     const applyRestore = () => {
       if (cancelled || userInteracted) return;
-      const target = initialProgress.blockId
-        ? reader.querySelector<HTMLElement>(`[data-reader-block="${initialProgress.blockId}"]`)
-        : null;
+      const target = Option.fromNullishOr(initialProgress.blockId).pipe(
+        Option.flatMap((blockId) => Option.fromNullishOr(
+          reader.querySelector<HTMLElement>(`[data-reader-block="${blockId}"]`),
+        )),
+      );
 
-      if (target) {
-        const readerRect = reader.getBoundingClientRect();
-        const anchorTop = readerRect.top + Math.min(140, reader.clientHeight * .25);
-        const desiredTargetTop = anchorTop - (initialProgress.blockOffset ?? 0);
-        reader.scrollTop += target.getBoundingClientRect().top - desiredTargetTop;
-      } else if (initialProgress.scrollTop) {
-        reader.scrollTop = initialProgress.scrollTop;
-      } else if (initialProgress.percent) {
-        reader.scrollTop = (reader.scrollHeight - reader.clientHeight) * (initialProgress.percent / 100);
-      }
+      Option.match(target, {
+        onNone: () => {
+          if (initialProgress.scrollTop) {
+            reader.scrollTop = initialProgress.scrollTop;
+          } else if (initialProgress.percent) {
+            reader.scrollTop = (reader.scrollHeight - reader.clientHeight) * (initialProgress.percent / 100);
+          }
+        },
+        onSome: (target) => {
+          const readerRect = reader.getBoundingClientRect();
+          const anchorTop = readerRect.top + Math.min(140, reader.clientHeight * .25);
+          const desiredTargetTop = anchorTop - (initialProgress.blockOffset ?? 0);
+          reader.scrollTop += target.getBoundingClientRect().top - desiredTargetTop;
+        },
+      });
 
       const restored = captureProgress();
       setPercent(restored.percent);
