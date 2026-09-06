@@ -26,7 +26,7 @@ button { color: inherit; }
 .nav-item.active { color: #fff; background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
 
 .main-panel { min-width: 0; }
-.topbar { min-height: 112px; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 23px 42px; border-bottom: 1px solid var(--line); background: rgba(250,249,245,.85); backdrop-filter: blur(12px); }
+.topbar { min-height: 112px; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 23px 42px; background: rgba(250,249,245,.85); backdrop-filter: blur(12px); }
 .eyebrow { margin: 0 0 5px; color: #89928b; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .topbar h1 { margin: 0; font-family: var(--font-newsreader), Georgia, serif; font-size: clamp(27px, 2.6vw, 38px); font-weight: 520; letter-spacing: -.04em; }
 .top-actions { display: flex; align-items: center; gap: 11px; }
@@ -327,7 +327,7 @@ body { color: #f0f0f0; }
   background-image: linear-gradient(rgba(255, 255, 255, .018) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .018) 1px, transparent 1px);
   background-size: 48px 48px;
 }
-.topbar { border-color: #202020; background: rgba(5, 5, 5, .88); }
+.topbar { background: rgba(5, 5, 5, .88); }
 .eyebrow { color: #696969; }
 .topbar h1, .section-title-row h2 { color: #f4f4f4; font-family: var(--font-geist-sans), Arial, sans-serif; font-weight: 520; letter-spacing: -.035em; }
 .search-box { color: #686868; border-color: #292929; background: #0b0b0b; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025); }
@@ -443,7 +443,7 @@ html[data-theme='light'] body { color: #171717; background: #f7f7f7; }
   background-color: #f7f7f7;
   background-image: linear-gradient(rgba(0, 0, 0, .022) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 0, 0, .022) 1px, transparent 1px);
 }
-[data-theme='light'] .topbar { border-color: #e2e2e2; background: rgba(247, 247, 247, .88); }
+[data-theme='light'] .topbar { background: rgba(247, 247, 247, .88); }
 [data-theme='light'] .eyebrow { color: #888; }
 [data-theme='light'] .topbar h1,
 [data-theme='light'] .section-title-row h2 { color: #171717; }
