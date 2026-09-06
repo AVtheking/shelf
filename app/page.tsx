@@ -168,7 +168,6 @@ export default function HomePage() {
             eyebrow={libraryEyebrow}
             menuId={menuId}
             query={query}
-            title={viewCopy.libraryTitle}
             onClearSearch={() => setQuery('')}
             onDelete={deleteArticle}
             onMenu={toggleArticleMenu}

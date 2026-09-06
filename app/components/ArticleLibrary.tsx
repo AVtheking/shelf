@@ -9,7 +9,6 @@ interface ArticleLibraryProps {
   eyebrow: string;
   menuId: string | null;
   query: string;
-  title: string;
   onClearSearch: () => void;
   onDelete: (article: Article) => void;
   onMenu: (article: Article, event: MouseEvent) => void;
@@ -22,7 +21,6 @@ export function ArticleLibrary({
   eyebrow,
   menuId,
   query,
-  title,
   onClearSearch,
   onDelete,
   onMenu,
@@ -31,7 +29,7 @@ export function ArticleLibrary({
   return (
     <section className="recent-section">
       <div className="section-title-row">
-        <div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2></div>
+        <h2>{eyebrow}</h2>
         {query && <button className="filter-button" onClick={onClearSearch}>Clear search <X size={14} /></button>}
       </div>
 

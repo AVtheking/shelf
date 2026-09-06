@@ -5,7 +5,6 @@ export type ShelfView = 'unread' | 'reading' | 'finished';
 
 export interface ShelfViewCopy {
   pageTitle: string;
-  libraryTitle: string;
   eyebrow: string;
   emptyMessage: string;
 }
@@ -13,19 +12,16 @@ export interface ShelfViewCopy {
 export const getShelfViewCopy = Match.type<ShelfView>().pipe(
   Match.when('unread', () => ({
     pageTitle: 'Unread',
-    libraryTitle: 'Unread',
     eyebrow: 'Not opened yet',
     emptyMessage: 'New articles you have not opened will appear here.',
   })),
   Match.when('reading', () => ({
     pageTitle: 'Reading',
-    libraryTitle: 'Reading',
     eyebrow: 'Currently in progress',
     emptyMessage: 'Open an unread article and it will move here.',
   })),
   Match.when('finished', () => ({
     pageTitle: 'Finished',
-    libraryTitle: 'Finished',
     eyebrow: 'Completed reading',
     emptyMessage: 'Articles you complete will appear here.',
   })),
