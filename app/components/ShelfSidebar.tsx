@@ -1,4 +1,4 @@
-import { BookOpen, Bookmark, CheckCircle2, Circle, Sparkles } from 'lucide-react';
+import { BookOpen, Bookmark, CheckCircle2, Circle } from 'lucide-react';
 import type { ShelfView } from '../lib/article-state';
 import type { Article } from '../lib/types';
 
@@ -25,11 +25,6 @@ export function ShelfSidebar({ activeView, articles, onViewChange }: ShelfSideba
         <button className={`nav-item ${activeView === 'reading' ? 'active' : ''}`} onClick={() => onViewChange('reading')}><BookOpen size={18} /> <b>Reading</b><span>{readingCount}</span></button>
         <button className={`nav-item ${activeView === 'finished' ? 'active' : ''}`} onClick={() => onViewChange('finished')}><CheckCircle2 size={18} /> <b>Finished</b><span>{finishedCount}</span></button>
       </nav>
-
-      <div className="local-note">
-        <Sparkles size={16} />
-        <div><strong>Private by design</strong><p>Saved only on this device</p></div>
-      </div>
     </aside>
   );
 }

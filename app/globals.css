@@ -24,9 +24,6 @@ button { color: inherit; }
 .nav-item { display: flex; align-items: center; gap: 11px; min-height: 43px; padding: 0 12px; color: #afbbb2; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 550; }
 .nav-item span { margin-left: auto; color: #819087; font-size: 12px; }
 .nav-item.active { color: #fff; background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
-.local-note { display: flex; gap: 10px; align-items: flex-start; margin-top: auto; padding: 14px; color: #a9b5ac; border: 1px solid rgba(255,255,255,.1); border-radius: 13px; background: rgba(255,255,255,.04); }
-.local-note svg { color: var(--lime); margin-top: 1px; flex: 0 0 auto; }
-.local-note strong { display: block; color: #edf0ea; font-size: 11px; }.local-note p { margin: 3px 0 0; font-size: 10px; }
 
 .main-panel { min-width: 0; }
 .topbar { min-height: 112px; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 23px 42px; border-bottom: 1px solid var(--line); background: rgba(250,249,245,.85); backdrop-filter: blur(12px); }
@@ -64,12 +61,12 @@ button { color: inherit; }
 
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 76px minmax(0,1fr); }
-  .sidebar { padding-inline: 13px; }.brand { padding-inline: 8px; }.brand > span:last-child, .nav-item:not(.active)::after, .nav-item { font-size: 0; }.nav-item { justify-content: center; padding: 0; }.nav-item span, .local-note { display: none; }
+  .sidebar { padding-inline: 13px; }.brand { padding-inline: 8px; }.brand > span:last-child, .nav-item:not(.active)::after, .nav-item { font-size: 0; }.nav-item { justify-content: center; padding: 0; }.nav-item span { display: none; }
   .topbar, .content-wrap { padding-left: 26px; padding-right: 26px; }
 }
 
 @media (max-width: 720px) {
-  .app-shell { display: block; }.sidebar { position: fixed; z-index: 20; top: auto; bottom: 0; width: 100%; height: 68px; flex-direction: row; align-items: center; padding: 8px 14px; border-top: 1px solid rgba(255,255,255,.1); }.brand, .local-note { display: none; }.side-nav { width: 100%; grid-template-columns: repeat(3,1fr); }.nav-item { min-height: 48px; }.nav-item svg { width: 20px; height: 20px; }
+  .app-shell { display: block; }.sidebar { position: fixed; z-index: 20; top: auto; bottom: 0; width: 100%; height: 68px; flex-direction: row; align-items: center; padding: 8px 14px; border-top: 1px solid rgba(255,255,255,.1); }.brand { display: none; }.side-nav { width: 100%; grid-template-columns: repeat(3,1fr); }.nav-item { min-height: 48px; }.nav-item svg { width: 20px; height: 20px; }
   .main-panel { padding-bottom: 68px; }.topbar { min-height: auto; align-items: flex-start; padding: 22px 18px; }.top-actions { margin-left: auto; }.search-box { width: 43px; padding: 0; justify-content: center; }.search-box input, .search-box kbd { display: none; }.primary-button { width: 43px; padding: 0; font-size: 0; }
   .content-wrap { padding: 27px 18px 44px; }.article-grid { grid-template-columns: 1fr; }.article-cover { height: 112px; }
 }
@@ -324,9 +321,6 @@ body { color: #f0f0f0; }
 .nav-item span { color: #555; }
 .nav-item:hover { color: #d7d7d7; background: #0d0d0d; }
 .nav-item.active { color: #fff; border: 1px solid #292929; background: #141414; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035); }
-.local-note { color: #777; border-color: #242424; background: #0b0b0b; }
-.local-note svg { color: #d8d8d8; }
-.local-note strong { color: #d4d4d4; }
 
 .main-panel {
   background-color: #050505;
@@ -444,9 +438,6 @@ html[data-theme='light'] body { color: #171717; background: #f7f7f7; }
 [data-theme='light'] .nav-item span { color: #989898; }
 [data-theme='light'] .nav-item:hover { color: #222; background: #ebebeb; }
 [data-theme='light'] .nav-item.active { color: #111; border-color: #d8d8d8; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .035); }
-[data-theme='light'] .local-note { color: #7b7b7b; border-color: #dedede; background: #fafafa; }
-[data-theme='light'] .local-note svg { color: #333; }
-[data-theme='light'] .local-note strong { color: #333; }
 
 [data-theme='light'] .main-panel {
   background-color: #f7f7f7;
