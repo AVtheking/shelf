@@ -169,7 +169,6 @@ export default function HomePage() {
             menuId={menuId}
             query={query}
             title={viewCopy.libraryTitle}
-            onAddArticle={() => setShowAdd(true)}
             onClearSearch={() => setQuery('')}
             onDelete={deleteArticle}
             onMenu={toggleArticleMenu}

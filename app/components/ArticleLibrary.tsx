@@ -1,4 +1,4 @@
-import { BookOpen, Plus, X } from 'lucide-react';
+import { BookOpen, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import type { Article } from '../lib/types';
 import { ArticleCard } from './ArticleCard';
@@ -10,7 +10,6 @@ interface ArticleLibraryProps {
   menuId: string | null;
   query: string;
   title: string;
-  onAddArticle: () => void;
   onClearSearch: () => void;
   onDelete: (article: Article) => void;
   onMenu: (article: Article, event: MouseEvent) => void;
@@ -24,7 +23,6 @@ export function ArticleLibrary({
   menuId,
   query,
   title,
-  onAddArticle,
   onClearSearch,
   onDelete,
   onMenu,
@@ -55,7 +53,6 @@ export function ArticleLibrary({
           <span><BookOpen size={24} /></span>
           <h3>Nothing here yet</h3>
           <p>{query ? 'Try a different search.' : emptyMessage}</p>
-          {!query && <button className="primary-button" onClick={onAddArticle}><Plus size={17} /> Add article</button>}
         </div>
       )}
     </section>
