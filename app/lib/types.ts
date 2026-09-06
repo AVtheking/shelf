@@ -1,4 +1,4 @@
-export type ArticleStatus = 'unread' | 'reading' | 'finished' | 'archived';
+export type ArticleStatus = 'unread' | 'reading' | 'finished';
 
 export type ArticleAccent = 'sage' | 'blue' | 'coral' | 'gold' | 'plum';
 
@@ -20,7 +20,6 @@ export interface Article {
   siteName: string;
   readTime: number;
   savedAt: string;
-  favorite: boolean;
   status: ArticleStatus;
   accent: ArticleAccent;
   progress: ReadingProgress;

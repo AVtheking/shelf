@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Check, ExternalLink, Heart } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink } from 'lucide-react';
 import { Option } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Article, ReadingProgress } from '../lib/types';
@@ -9,10 +9,9 @@ interface ReaderProps {
   article: Article;
   onClose: () => void;
   onProgress: (id: string, progress: ReadingProgress) => void;
-  onToggleFavorite: () => void;
 }
 
-export function Reader({ article, onClose, onProgress, onToggleFavorite }: ReaderProps) {
+export function Reader({ article, onClose, onProgress }: ReaderProps) {
   const readerRef = useRef<HTMLDivElement>(null);
   const initialProgressRef = useRef<ReadingProgress>(article.progress);
   const saveTimerRef = useRef<number | null>(null);
@@ -176,7 +175,6 @@ export function Reader({ article, onClose, onProgress, onToggleFavorite }: Reade
         <button className="round-button" aria-label="Back to shelf" onClick={closeReader}><ArrowLeft size={19} /></button>
         <div className="reader-toolbar-title"><strong>{article.title}</strong><span>{Math.round(percent)}% read</span></div>
         <div className="reader-actions">
-          <button className={`round-button ${article.favorite ? 'selected' : ''}`} aria-label={article.favorite ? 'Remove from favorites' : 'Add to favorites'} onClick={onToggleFavorite}><Heart size={18} fill={article.favorite ? 'currentColor' : 'none'} /></button>
           <a className="round-button" href={article.url} target="_blank" rel="noreferrer" aria-label="Open original article"><ExternalLink size={18} /></a>
         </div>
       </header>

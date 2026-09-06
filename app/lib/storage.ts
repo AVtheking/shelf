@@ -1,10 +1,16 @@
 import { Option } from 'effect';
-import { syncStatusWithProgress } from './article-state';
-import type { Article, ReadingProgress } from './types';
+import { migrateStoredStatus } from './article-state';
+import type { Article, ArticleStatus, ReadingProgress } from './types';
 
 const ARTICLES_KEY = 'shelf:articles:v1';
 const PROGRESS_PREFIX = 'shelf:progress:v1:';
 const ASCII_ART_PATTERN = /[┌┐└┘│─╔╗╚╝═║▲▼◐○]/;
+
+type StoredArticle = Omit<Article, 'status'> & {
+  category?: string;
+  favorite?: boolean;
+  status: ArticleStatus | 'archived';
+};
 
 function normalizeArticleContent(content: string) {
   if (typeof DOMParser === 'undefined' || !content.includes('<pre')) return content;
@@ -77,7 +83,7 @@ export function loadArticles(): Article[] {
   if (!value) return [];
 
   try {
-    const parsed = JSON.parse(value) as Array<Article & { category?: string }>;
+    const parsed = JSON.parse(value) as StoredArticle[];
     if (!Array.isArray(parsed)) return [];
 
     const articles = parsed
@@ -85,11 +91,12 @@ export function loadArticles(): Article[] {
       .map((article) => {
         const migrated = { ...article };
         delete migrated.category;
+        delete migrated.favorite;
         migrated.content = normalizeArticleContent(migrated.content);
         const progress = loadReadingProgress(migrated.id).pipe(
           Option.getOrElse(() => migrated.progress),
         );
-        const status = syncStatusWithProgress(migrated.status, progress.percent);
+        const status = migrateStoredStatus(migrated.status, progress.percent);
         return { ...migrated, progress, status } as Article;
       });
 

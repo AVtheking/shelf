@@ -11,10 +11,8 @@ interface ArticleLibraryProps {
   query: string;
   title: string;
   onAddArticle: () => void;
-  onArchive: (article: Article) => void;
   onClearSearch: () => void;
   onDelete: (article: Article) => void;
-  onFavorite: (article: Article) => void;
   onMenu: (article: Article, event: MouseEvent) => void;
   onOpen: (article: Article) => void;
 }
@@ -27,10 +25,8 @@ export function ArticleLibrary({
   query,
   title,
   onAddArticle,
-  onArchive,
   onClearSearch,
   onDelete,
-  onFavorite,
   onMenu,
   onOpen,
 }: ArticleLibraryProps) {
@@ -50,8 +46,6 @@ export function ArticleLibrary({
               menuOpen={menuId === article.id}
               onOpen={() => onOpen(article)}
               onMenu={(event) => onMenu(article, event)}
-              onFavorite={() => onFavorite(article)}
-              onArchive={() => onArchive(article)}
               onDelete={() => onDelete(article)}
             />
           ))}

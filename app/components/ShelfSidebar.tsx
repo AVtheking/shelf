@@ -1,13 +1,18 @@
-import { Archive, Bookmark, Heart, Home, Library, Sparkles } from 'lucide-react';
+import { BookOpen, Bookmark, CheckCircle2, Circle, Sparkles } from 'lucide-react';
 import type { ShelfView } from '../lib/article-state';
+import type { Article } from '../lib/types';
 
 interface ShelfSidebarProps {
   activeView: ShelfView;
-  articleCount: number;
+  articles: Article[];
   onViewChange: (view: ShelfView) => void;
 }
 
-export function ShelfSidebar({ activeView, articleCount, onViewChange }: ShelfSidebarProps) {
+export function ShelfSidebar({ activeView, articles, onViewChange }: ShelfSidebarProps) {
+  const unreadCount = articles.filter((article) => article.status === 'unread').length;
+  const readingCount = articles.filter((article) => article.status === 'reading').length;
+  const finishedCount = articles.filter((article) => article.status === 'finished').length;
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -16,10 +21,9 @@ export function ShelfSidebar({ activeView, articleCount, onViewChange }: ShelfSi
       </div>
 
       <nav className="side-nav" aria-label="Main navigation">
-        <button className={`nav-item ${activeView === 'home' ? 'active' : ''}`} onClick={() => onViewChange('home')}><Home size={18} /> <b>Home</b></button>
-        <button className={`nav-item ${activeView === 'all' ? 'active' : ''}`} onClick={() => onViewChange('all')}><Library size={18} /> <b>All articles</b><span>{articleCount}</span></button>
-        <button className={`nav-item ${activeView === 'favorites' ? 'active' : ''}`} onClick={() => onViewChange('favorites')}><Heart size={18} /> <b>Favorites</b></button>
-        <button className={`nav-item ${activeView === 'archive' ? 'active' : ''}`} onClick={() => onViewChange('archive')}><Archive size={18} /> <b>Archive</b></button>
+        <button className={`nav-item ${activeView === 'unread' ? 'active' : ''}`} onClick={() => onViewChange('unread')}><Circle size={18} /> <b>Unread</b><span>{unreadCount}</span></button>
+        <button className={`nav-item ${activeView === 'reading' ? 'active' : ''}`} onClick={() => onViewChange('reading')}><BookOpen size={18} /> <b>Reading</b><span>{readingCount}</span></button>
+        <button className={`nav-item ${activeView === 'finished' ? 'active' : ''}`} onClick={() => onViewChange('finished')}><CheckCircle2 size={18} /> <b>Finished</b><span>{finishedCount}</span></button>
       </nav>
 
       <div className="local-note">

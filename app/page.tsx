@@ -1,19 +1,16 @@
 'use client';
 
 import { Check } from 'lucide-react';
-import { Match, Option } from 'effect';
+import { Option } from 'effect';
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { AddArticleModal } from './components/AddArticleModal';
 import { ArticleLibrary } from './components/ArticleLibrary';
-import { ContinueReading } from './components/ContinueReading';
 import { Reader } from './components/Reader';
-import { ReadingStatusTabs } from './components/ReadingStatusTabs';
 import { ShelfHeader } from './components/ShelfHeader';
 import { ShelfSidebar } from './components/ShelfSidebar';
 import {
   articleIsVisibleInView,
   getShelfViewCopy,
-  readingStatusFromProgress,
   syncStatusWithProgress,
   type ShelfView,
 } from './lib/article-state';
@@ -24,7 +21,7 @@ const accents: ArticleAccent[] = ['sage', 'blue', 'coral', 'gold', 'plum'];
 
 export default function HomePage() {
   const [articles, setArticles] = useState<Article[]>([]);
-  const [activeView, setActiveView] = useState<ShelfView>('home');
+  const [activeView, setActiveView] = useState<ShelfView>('unread');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -83,20 +80,9 @@ export default function HomePage() {
       .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
   }, [activeView, articles, query]);
 
-  const continueArticle = useMemo(() => Option.fromNullishOr(articles
-    .filter((article) => article.status === 'reading' && article.progress.percent > 0 && article.progress.percent < 98)
-    .sort((a, b) => new Date(b.progress.updatedAt).getTime() - new Date(a.progress.updatedAt).getTime())[0]), [articles]);
-
   const selectedArticle = Option.fromNullishOr(selectedId).pipe(
     Option.flatMap((id) => Option.fromNullishOr(articles.find((article) => article.id === id))),
   );
-  const continueArticleId = continueArticle.pipe(
-    Option.map((article) => article.id),
-    Option.getOrUndefined,
-  );
-  const libraryArticles = activeView === 'home' && !query
-    ? visibleArticles.filter((article) => article.id !== continueArticleId).slice(0, 6)
-    : visibleArticles;
   const viewCopy = getShelfViewCopy(activeView);
   const libraryEyebrow = query
     ? `${visibleArticles.length} matching results`
@@ -137,7 +123,6 @@ export default function HomePage() {
     const article: Article = {
       ...extracted,
       id: crypto.randomUUID(),
-      favorite: false,
       status: 'unread',
       accent: accents[articles.length % accents.length],
       savedAt: new Date().toISOString(),
@@ -154,28 +139,6 @@ export default function HomePage() {
     setMenuId(null);
   };
 
-  const toggleFavorite = (article: Article) => {
-    updateArticle(
-      article.id,
-      (item) => ({ ...item, favorite: !item.favorite }),
-      article.favorite ? 'Removed from favorites' : 'Added to favorites',
-    );
-  };
-
-  const toggleArchive = (article: Article) => {
-    updateArticle(
-      article.id,
-      (item) => ({
-        ...item,
-        status: Match.value(item.status).pipe(
-          Match.when('archived', () => readingStatusFromProgress(item.progress.percent)),
-          Match.orElse(() => 'archived' as const),
-        ),
-      }),
-      article.status === 'archived' ? 'Returned to your shelf' : 'Article archived',
-    );
-  };
-
   const toggleArticleMenu = (article: Article, event: MouseEvent) => {
     event.stopPropagation();
     setMenuId(menuId === article.id ? null : article.id);
@@ -185,7 +148,7 @@ export default function HomePage() {
     <main className="app-shell" onClick={() => menuId && setMenuId(null)}>
       <ShelfSidebar
         activeView={activeView}
-        articleCount={articles.filter((article) => article.status !== 'archived').length}
+        articles={articles}
         onViewChange={chooseView}
       />
 
@@ -199,31 +162,16 @@ export default function HomePage() {
         />
 
         <div className="content-wrap">
-          <ReadingStatusTabs activeView={activeView} articles={articles} onViewChange={chooseView} />
-
-          {activeView === 'home' && !query && Option.match(continueArticle, {
-            onNone: () => null,
-            onSome: (article) => (
-              <ContinueReading
-                article={article}
-                onOpen={() => openArticle(article)}
-                onViewAll={() => chooseView('all')}
-              />
-            ),
-          })}
-
           <ArticleLibrary
-            articles={libraryArticles}
+            articles={visibleArticles}
             emptyMessage={viewCopy.emptyMessage}
             eyebrow={libraryEyebrow}
             menuId={menuId}
             query={query}
             title={viewCopy.libraryTitle}
             onAddArticle={() => setShowAdd(true)}
-            onArchive={toggleArchive}
             onClearSearch={() => setQuery('')}
             onDelete={deleteArticle}
-            onFavorite={toggleFavorite}
             onMenu={toggleArticleMenu}
             onOpen={openArticle}
           />
@@ -238,7 +186,6 @@ export default function HomePage() {
             article={article}
             onClose={() => setSelectedId(null)}
             onProgress={updateProgress}
-            onToggleFavorite={() => updateArticle(article.id, (item) => ({ ...item, favorite: !item.favorite }))}
           />
         ),
       })}
