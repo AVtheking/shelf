@@ -13,8 +13,16 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
 const localBindingConfig = {
+  name: 'shelf',
+  account_id: 'a1026f0106f873e06193e049c01f57a3',
   main: 'vinext/server/app-router-entry',
   compatibility_flags: ['nodejs_compat'],
+  routes: [
+    {
+      pattern: 'shelf.avtheking.com',
+      custom_domain: true,
+    },
+  ],
   d1_databases: d1
     ? [
         {
